@@ -25,8 +25,8 @@
         <input id="stop" type="button" value="Stop" disabled>
         <div id="waveform2"></div>
     </div>
-    <script src="./wavesurfer.js"></script>
-    <script src="./js_audio.js"></script>
+    <script src="./js/wavesurfer.js"></script>
+    <script src="./js/js_audio.js"></script>
     <script>
         // Convert an AudioBuffer to a Blob
         function WaveBlob(abuffer) {
@@ -245,20 +245,6 @@
             ws2.zoom();
             pixDense = minPixDense;
         });
-
-        const float32ArrayToC = (arr) => {
-            var ptr = api.alloc_buffer(arr.byteLength);
-            Module.HEAPF32.set(arr, ptr / arr.BYTES_PER_ELEMENT);
-            return ptr;
-        };
-
-        const cToFloat32Array = (ptr, len) => {
-            var tmp = new Float32Array(Module.HEAPF32.buffer,
-                p, len);
-            var arr = new Float32Array(tmp);
-            api.free_buffer(ptr);
-            return arr;
-        }
 
         const doProcess = (ctx, inp, out) => {
             var frame_size = api.frame_size();
