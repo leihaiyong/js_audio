@@ -10,7 +10,7 @@
     <h5>Select an audio file:</h5>
     <input id="input" type="file" accept=".wav,.mp3,.ogg">
     <input id="enhance" type="button" value="Enhance" disabled>
-    Level: <input id="agc-level" type="number" min="0" max="32000" step="100" value="8000" title="range: 0 to 32000, default: 8000" style="width: 60px;">
+    Level: <input id="agc-level" type="number" min="1" max="32000" step="100" value="8000" title="range: 1 to 32000, default: 8000" style="width: 60px;">
     <input id="denoise" type="button" value="Denoise" disabled>
     Level: <input id="ns-level" type="number" min="-1" max="-120" value="-30" title="range: -1 to -120, default: -30" style="width: 40px;"> dB
     <input id="deverb" type="button" value="Deverb" disabled>
@@ -292,7 +292,7 @@
 
         enhance.addEventListener('click', () => {
             console.log('enhance: ' + agc_level.value);
-            if (agc_level.value < 0 || agc_level.value > 32000) {
+            if (agc_level.value < 1 || agc_level.value > 32000) {
                 alert("invalid value: " + agc_level.value);
                 return;
             }
