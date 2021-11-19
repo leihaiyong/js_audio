@@ -302,12 +302,6 @@
 
         enhance.addEventListener('click', () => {
             console.log('enhance');
-            // var arr = origAudioBuffer.getChannelData(0);
-            // var ptr = float32ArrayToC(arr);
-            // api.enhance(ptr, arr.length, 8000);
-            // var res = cToFloat32Array(ptr, arr.length);
-            // modAudioBuffer.copyToChannel(res, 0, 0);
-            // ws2.loadBlob(WaveBlob(modAudioBuffer));
             var inp = origAudioBuffer.getChannelData(0);
             var out = modAudioBuffer.getChannelData(0);
             doEnhance(inp, out);
@@ -316,12 +310,6 @@
 
         denoise.addEventListener('click', () => {
             console.log('denoise');
-            // var arr = origAudioBuffer.getChannelData(0);
-            // var ptr = float32ArrayToC(arr);
-            // api.denoise(ptr, arr.length, -30);
-            // var res = cToFloat32Array(ptr, arr.length);
-            // modAudioBuffer.copyToChannel(res, 0, 0);
-            // ws2.loadBlob(WaveBlob(modAudioBuffer));
             var inp = origAudioBuffer.getChannelData(0);
             var out = modAudioBuffer.getChannelData(0);
             doDenoise(inp, out);
@@ -330,12 +318,6 @@
 
         deverb.addEventListener('click', () => {
             console.log('deverb');
-            // var arr = origAudioBuffer.getChannelData(0);
-            // var ptr = float32ArrayToC(arr);
-            // api.deverb(ptr, arr.length, 0, 0);
-            // var res = cToFloat32Array(ptr, arr.length);
-            // modAudioBuffer.copyToChannel(res, 0, 0);
-            // ws2.loadBlob(WaveBlob(modAudioBuffer));
             var inp = origAudioBuffer.getChannelData(0);
             var out = modAudioBuffer.getChannelData(0);
             doDeverb(inp, out);
