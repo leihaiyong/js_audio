@@ -8,7 +8,10 @@
 </head>
 <body>
     <h5>Select an audio file:</h5>
-    <input id="input" type="file" accept=".wav,.mp3,.ogg">
+    <input type="file" accept=".wav,.mp3,.ogg">
+    <h5 id="file-info"></h5>
+    <input id="resample" type="button" value="Resample" disabled>
+    <input id="rate" type="number" value="8000" style="width: 60px;">HZ
     <input id="enhance" type="button" value="Enhance" disabled>
     Level: <input id="agc-level" type="number" min="1" max="32000" step="100" value="8000" title="range: 1 to 32000, default: 8000" style="width: 60px;">
     <input id="denoise" type="button" value="Denoise" disabled>
@@ -86,26 +89,8 @@
         }
     </script>
     <script>
-      Module.onRuntimeInitialized = async _ => {
-        const api = {
-          version: Module.cwrap('version', 'string', []),
-          frame_size: Module.cwrap('frame_size', 'number', []),
-          alloc_buffer: Module.cwrap('alloc_buffer', 'number', ['number']),
-          free_buffer: Module.cwrap('free_buffer', '', ['number']),
-          create: Module.cwrap('create', 'number', []),
-          destroy: Module.cwrap('destroy', '', ['number']),
-          set_enhance: Module.cwrap('set_enhance', '', ['number', 'number', 'number']),
-          set_denoise: Module.cwrap('set_denoise', '', ['number', 'number', 'number']),
-          set_deverb: Module.cwrap('set_deverb', '', ['number', 'number', 'number', 'number']),
-          process: Module.cwrap('process', 'number', ['number', 'number', 'number']),
-          enhance: Module.cwrap('enhance', 'number', ['number', 'number', 'number']),
-          denoise: Module.cwrap('denoise', 'number', ['number', 'number', 'number']),
-          deverb: Module.cwrap('deverb', 'number', ['number', 'number', 'number', 'number']),
-        };
-
-        console.log('version', api.version());
-
         const input = document.querySelector("input[type=file]");
+        const fileInfo = document.getElementById("file-info");
         const playOrig = document.getElementById("playOrig");
         const stopOrig = document.getElementById("stopOrig");
         const play = document.getElementById("play");
@@ -118,6 +103,8 @@
         const denoise = document.getElementById("denoise");
         const ns_level = document.getElementById("ns-level");
         const deverb = document.getElementById("deverb");
+        const resample = document.getElementById("resample");
+        const rate = document.getElementById("rate");
 
         var ws1 = WaveSurfer.create({
             container: '#waveform1',
@@ -158,41 +145,6 @@
         ws2.on('finish', () => {
             play.disabled = false;
             stop.disabled = true;
-        });
-
-        var origAudioBuffer, modAudioBuffer;
-        var audioCtx;
-
-        input.addEventListener('change', () => {
-            if (input.files.length !== 0) {
-                console.log('loading', input.files[0]);
-                const reader = new FileReader();
-                reader.onload = function (ev) {
-                    audioCtx = new AudioContext({ sampleRate: 8000 });
-                    audioCtx.decodeAudioData(ev.target.result, (buffer) => {
-                        if (buffer.numberOfChannels !== 1) {
-                            alert("Too many channels: " + buffer.numberOfChannels);
-                            return;
-                        }
-
-                        origAudioBuffer = buffer;
-                        ws1.loadBlob(WaveBlob(origAudioBuffer));
-
-                        modAudioBuffer = audioCtx.createBuffer(buffer.numberOfChannels,
-                            buffer.length, buffer.sampleRate);
-                        for (let i = 0; i < buffer.numberOfChannels; i ++) {
-                            modAudioBuffer.copyToChannel(buffer.getChannelData(i),
-                                i, 0);
-                        }
-                        
-                        // enable ui buttons
-                        enhance.disabled = false;
-                        denoise.disabled = false;
-                        deverb.disabled = false;
-                    });
-                };
-                reader.readAsArrayBuffer(input.files[0]);
-            }
         });
 
         playOrig.addEventListener('click', () => {
@@ -250,77 +202,168 @@
             pixDense = minPixDense;
         });
 
-        const doProcess = (ctx, inp, out) => {
-            var frame_size = api.frame_size();
-            var buf = api.alloc_buffer(frame_size * inp.BYTES_PER_ELEMENT);
-            var length = inp.length;
-            var offset = 0;
-            while (offset < length) {
-                var frame_len = (offset + frame_size <= length)
-                    ? frame_size : (length - offset);
-                var frame_in = inp.subarray(offset, offset + frame_len);
-                var frame_out = out.subarray(offset, offset + frame_len);
-                Module.HEAPF32.set(frame_in, (buf / inp.BYTES_PER_ELEMENT));
-                api.process(ctx, buf, frame_len);
-                frame_out.set(new Float32Array(Module.HEAPF32.buffer,
-                    buf, frame_len));
-                offset += frame_len;
+        Module.onRuntimeInitialized = async _ => {
+            const api = {
+                version: Module.cwrap('version', 'string', []),
+                frame_size: Module.cwrap('frame_size', 'number', []),
+                alloc_buffer: Module.cwrap('alloc_buffer', 'number', ['number']),
+                free_buffer: Module.cwrap('free_buffer', '', ['number']),
+                create: Module.cwrap('create', 'number', []),
+                destroy: Module.cwrap('destroy', '', ['number']),
+                set_enhance: Module.cwrap('set_enhance', '', ['number', 'number', 'number']),
+                set_denoise: Module.cwrap('set_denoise', '', ['number', 'number', 'number']),
+                set_deverb: Module.cwrap('set_deverb', '', ['number', 'number', 'number', 'number']),
+                process: Module.cwrap('process', 'number', ['number', 'number', 'number']),
+                enhance: Module.cwrap('enhance', 'number', ['number', 'number', 'number']),
+                denoise: Module.cwrap('denoise', 'number', ['number', 'number', 'number']),
+                deverb: Module.cwrap('deverb', 'number', ['number', 'number', 'number', 'number']),
+                create_resampler: Module.cwrap('create_resampler', 'number', ['number', 'number']),
+                destroy_resampler: Module.cwrap('destroy_resampler', '', ['number']),
+                resample: Module.cwrap('resample', 'number', ['number', 'number', 'number'])
+            };
+
+            console.log('version', api.version());
+
+            var origAudioBuffer, modAudioBuffer;
+            var audioCtx;
+
+            input.addEventListener('change', () => {
+                if (input.files.length !== 0) {
+                    console.log('loading', input.files[0]);
+                    const reader = new FileReader();
+                    reader.onload = function (ev) {
+                        audioCtx = new AudioContext({sampleRate: 8000});
+                        audioCtx.decodeAudioData(ev.target.result, (buffer) => {
+                            fileInfo.innerText = `file: ${input.files[0].name}, size: ${input.files[0].size}, num chans: ${buffer.numberOfChannels}, sampling rate: ${buffer.sampleRate}HZ, length: ${buffer.length}, duration: ${buffer.duration}s`;
+                            if (buffer.numberOfChannels !== 1) {
+                                alert("Too many channels: " + buffer.numberOfChannels);
+                                return;
+                            }
+
+                            origAudioBuffer = buffer;
+                            ws1.loadBlob(WaveBlob(origAudioBuffer));
+
+                            modAudioBuffer = audioCtx.createBuffer(buffer.numberOfChannels,
+                                buffer.length, buffer.sampleRate);
+                            for (let i = 0; i < buffer.numberOfChannels; i ++) {
+                                modAudioBuffer.copyToChannel(buffer.getChannelData(i),
+                                    i, 0);
+                            }
+                            
+                            // enable ui buttons
+                            resample.disabled = false;
+                            enhance.disabled = false;
+                            denoise.disabled = false;
+                            deverb.disabled = false;
+                        });
+                    };
+                    reader.readAsArrayBuffer(input.files[0]);
+                }
+            });
+
+            const doProcess = (ctx, inp, out) => {
+                var frame_size = api.frame_size();
+                var buf = api.alloc_buffer(frame_size * inp.BYTES_PER_ELEMENT);
+                var length = inp.length;
+                var offset = 0;
+                while (offset < length) {
+                    var frame_len = (offset + frame_size <= length)
+                        ? frame_size : (length - offset);
+                    var frame_in = inp.subarray(offset, offset + frame_len);
+                    var frame_out = out.subarray(offset, offset + frame_len);
+                    Module.HEAPF32.set(frame_in, (buf / inp.BYTES_PER_ELEMENT));
+                    api.process(ctx, buf, frame_len);
+                    frame_out.set(new Float32Array(Module.HEAPF32.buffer,
+                        buf, frame_len));
+                    offset += frame_len;
+                }
+                api.free_buffer(buf);
+            };
+
+            const doEnhance = (inp, out, level = 8000) => {
+                var ctx = api.create();
+                api.set_enhance(ctx, 1, level);
+                doProcess(ctx, inp, out)
+                api.destroy(ctx);
+            };
+
+            const doDenoise = (inp, out, level = -30) => {
+                var ctx = api.create();
+                api.set_denoise(ctx, 1, level);
+                doProcess(ctx, inp, out)
+                api.destroy(ctx);
+            };
+
+            const doDeverb = (inp, out) => {
+                var ctx = api.create();
+                api.set_deverb(ctx, 1, 0, 0);
+                doProcess(ctx, inp, out)
+                api.destroy(ctx);
+            };
+
+            const doResample = (inp, out, inRate, outRate) => {
+                var ctx = api.create_resampler(inRate, outRate);
+                var in_buf = api.alloc_buffer(inp.length * inp.BYTES_PER_ELEMENT);
+                Module.HEAPF32.set(inp, (in_buf / inp.BYTES_PER_ELEMENT));
+                var out_buf = api.alloc_buffer(out.length * out.BYTES_PER_ELEMENT);
+                var siz = new Uint32Array([inp.length, out.length]);
+                var siz_buf = api.alloc_buffer(siz.length * siz.BYTES_PER_ELEMENT);
+                Module.HEAPU32.set(siz, (siz_buf / siz.BYTES_PER_ELEMENT));
+                api.resample(ctx, in_buf, out_buf, siz_buf);
+                siz.set(new Uint32Array(Module.HEAPU32.buffer, siz_buf, siz.length));
+                out.set(new Float32Array(Module.HEAPF32.buffer, out_buf, siz[1]));
+                if (siz[1] < out.length) {
+                    out.fill(0, siz[1]); // zero unused bytes
+                }
+                api.free_buffer(in_buf);
+                api.free_buffer(out_buf);
+                api.free_buffer(siz_buf);
+                api.destroy_resampler(ctx);
             }
-            api.free_buffer(buf);
-        };
 
-        const doEnhance = (inp, out, level = 8000) => {
-            var ctx = api.create();
-            api.set_enhance(ctx, 1, level);
-            doProcess(ctx, inp, out)
-            api.destroy(ctx);
-        };
+            resample.addEventListener('click', () => {
+                console.log('resample: ' + rate.value);
+                if (rate.value <= 0) {
+                    alert("invalid value: " + rate.value);
+                    return;
+                }
+                var inp = origAudioBuffer.getChannelData(0);
+                var out = modAudioBuffer.getChannelData(0);
+                doResample(inp, out, origAudioBuffer.sampleRate, rate.value | 0);
+                ws2.loadBlob(WaveBlob(modAudioBuffer));
+            });
 
-        const doDenoise = (inp, out, level = -30) => {
-            var ctx = api.create();
-            api.set_denoise(ctx, 1, level);
-            doProcess(ctx, inp, out)
-            api.destroy(ctx);
-        };
+            enhance.addEventListener('click', () => {
+                console.log('enhance: ' + agc_level.value);
+                if (agc_level.value < 1 || agc_level.value > 32000) {
+                    alert("invalid value: " + agc_level.value);
+                    return;
+                }
+                var inp = origAudioBuffer.getChannelData(0);
+                var out = modAudioBuffer.getChannelData(0);
+                doEnhance(inp, out, agc_level.value);
+                ws2.loadBlob(WaveBlob(modAudioBuffer));
+            });
 
-        const doDeverb = (inp, out) => {
-            var ctx = api.create();
-            api.set_deverb(ctx, 1, 0, 0);
-            doProcess(ctx, inp, out)
-            api.destroy(ctx);
-        };
+            denoise.addEventListener('click', () => {
+                console.log('denoise: ' + ns_level.value);
+                if (ns_level.value >=0 || ns_level.value < -120) {
+                    alert("invalid value: " + ns_level.value);
+                    return;
+                }
+                var inp = origAudioBuffer.getChannelData(0);
+                var out = modAudioBuffer.getChannelData(0);
+                doDenoise(inp, out, ns_level.value);
+                ws2.loadBlob(WaveBlob(modAudioBuffer));
+            });
 
-        enhance.addEventListener('click', () => {
-            console.log('enhance: ' + agc_level.value);
-            if (agc_level.value < 1 || agc_level.value > 32000) {
-                alert("invalid value: " + agc_level.value);
-                return;
-            }
-            var inp = origAudioBuffer.getChannelData(0);
-            var out = modAudioBuffer.getChannelData(0);
-            doEnhance(inp, out, agc_level.value);
-            ws2.loadBlob(WaveBlob(modAudioBuffer));
-        });
-
-        denoise.addEventListener('click', () => {
-            console.log('denoise: ' + ns_level.value);
-            if (ns_level.value >=0 || ns_level.value < -120) {
-                alert("invalid value: " + ns_level.value);
-                return;
-            }
-            var inp = origAudioBuffer.getChannelData(0);
-            var out = modAudioBuffer.getChannelData(0);
-            doDenoise(inp, out, ns_level.value);
-            ws2.loadBlob(WaveBlob(modAudioBuffer));
-        });
-
-        deverb.addEventListener('click', () => {
-            console.log('deverb');
-            var inp = origAudioBuffer.getChannelData(0);
-            var out = modAudioBuffer.getChannelData(0);
-            doDeverb(inp, out);
-            ws2.loadBlob(WaveBlob(modAudioBuffer));
-        });
+            deverb.addEventListener('click', () => {
+                console.log('deverb');
+                var inp = origAudioBuffer.getChannelData(0);
+                var out = modAudioBuffer.getChannelData(0);
+                doDeverb(inp, out);
+                ws2.loadBlob(WaveBlob(modAudioBuffer));
+            });
       };
     </script>
 </body>
